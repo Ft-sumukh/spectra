@@ -15,72 +15,51 @@ log = get_logger("UI")
 
 
 class AssistantWorker(QObject):
+    """Runs one generation on a worker thread and reports real telemetry."""
+
     finished = Signal(str, dict)
     error = Signal(str)
 
-    def __init__(self, prompt: str):
+    def __init__(self, prompt: str, llm=None):
         super().__init__()
         self._prompt = prompt
+        self._llm = llm
 
     def run(self):
-        import time
-        t0 = time.perf_counter()
         try:
-            response = self._generate_response(self._prompt)
-            t1 = time.perf_counter()
-            latency_ms = (t1 - t0) * 1000.0
+            if self._llm is None:
+                from ai.llm import LocalLLM
+                self._llm = LocalLLM()
+
+            if not self._llm.is_loaded:
+                ok, msg = self._llm.load()
+                if not ok:
+                    self.error.emit(msg)
+                    return
+
+            res = self._llm.generate(self._prompt, max_tokens=512)
+            if not res.success:
+                self.error.emit(res.error_message or "Generation failed")
+                return
+
             meta = {
-                "model": "SPECTRA Silicon Query Engine",
-                "runtime": "Native / ONNX Runtime",
-                "device": "CPU",
-                "latency_ms": latency_ms,
+                "model": res.model_name,
+                "backend": res.backend,
+                "runtime": res.backend,
+                "device": res.device,
+                "provider": res.provider,
+                "latency_ms": res.total_ms,
+                "ttft_ms": res.ttft_ms,
+                "tokens": res.completion_tokens,
+                "tok_per_s": res.tokens_per_second,
                 "local": True,
+                "requested_device": res.requested_device,
+                "fell_back": res.fell_back_to_cpu,
+                "notes": res.notes,
             }
-            self.finished.emit(response, meta)
+            self.finished.emit(res.text, meta)
         except Exception as e:
             self.error.emit(str(e))
-
-    def _generate_response(self, prompt: str) -> str:
-        p = prompt.lower()
-        if any(w in p for w in ["npu", "neural processing", "hexagon"]):
-            return (
-                "SPECTRA routes NPU workloads to the Qualcomm Hexagon NPU via the QNN execution provider "
-                "in ONNX Runtime. On this host Intel machine, QNNExecutionProvider is NOT available - "
-                "Snapdragon NPU acceleration will activate automatically when running on Snapdragon X Elite/Plus hardware."
-            )
-        if any(w in p for w in ["mobilenet", "model", "vision", "classify"]):
-            return (
-                "SPECTRA is loaded with MobileNetV2 (ONNX FP32, 13.59 MB, 3.5M parameters) as its primary starter vision model. "
-                "The model runs via ONNX Runtime on CPU with CPUExecutionProvider in ~7 ms latency. "
-                "On Snapdragon hardware, it routes to QNNExecutionProvider for sub-3ms Hexagon NPU execution."
-            )
-        if any(w in p for w in ["offline", "private", "local"]):
-            return (
-                "SPECTRA operates in strict OFFLINE MODE. All AI inference runs on local silicon. "
-                "No sensor inputs (camera, microphone, screen, documents) leave this workstation. "
-                "Zero cloud APIs, zero telemetry."
-            )
-        if any(w in p for w in ["hardware", "cpu", "gpu"]):
-            from hardware.detector import detect_hardware
-            hw = detect_hardware()
-            return (
-                f"Detected system hardware:\n"
-                f"- CPU: {hw.cpu.name} ({hw.cpu.architecture})\n"
-                f"- GPU: {hw.gpus[0].name if hw.gpus else 'None'}\n"
-                f"- NPU: {'AVAILABLE - ' + hw.npu.name if hw.npu.available else 'NOT DETECTED (Honest reporting: Intel host machine)'}\n"
-                f"- RAM: {hw.ram.total_mb/1024:.1f} GB ({hw.ram.available_mb/1024:.1f} GB available)"
-            )
-        if any(w in p for w in ["router", "workload", "routing"]):
-            return (
-                "SPECTRA's Hardware-Aware AI Workload Router inspects incoming tasks and selects "
-                "the optimal model and execution provider in priority order [NPU -> GPU -> CPU]. "
-                "If a target device is unavailable, it performs an explicit fallback with transparent diagnostic logs."
-            )
-        return (
-            f"You asked: '{self._prompt}'\n\n"
-            "SPECTRA's local assistant operates 100% on-device. "
-            "You can query system silicon telemetry, NPU routing logic, MobileNetV2 edge execution, and privacy safeguards."
-        )
 
 
 class AssistantPage(QWidget):
@@ -88,6 +67,7 @@ class AssistantPage(QWidget):
         super().__init__(parent)
         self._thread = None
         self._worker = None
+        self._llm = None
         self._build_ui()
 
     def _build_ui(self):
@@ -120,7 +100,7 @@ class AssistantPage(QWidget):
         # Input
         input_row = QHBoxLayout()
         self._input = QLineEdit()
-        self._input.setPlaceholderText("Ask about hardware, NPU, MobileNetV2, router...")
+        self._input.setPlaceholderText("Ask the local LLM anything...")
         self._input.setFixedHeight(42)
         self._input.setStyleSheet("""
             QLineEdit {
@@ -147,15 +127,15 @@ class AssistantPage(QWidget):
         layout.addLayout(input_row)
 
         self._chat.setText(
-            "SPECTRA AI Assistant\n"
-            + "-" * 40 + "\n\n"
-            "This assistant operates completely offline on local hardware.\n"
-            "Try asking:\n"
-            "  - What hardware is detected?\n"
-            "  - Is the Snapdragon NPU available?\n"
-            "  - What vision model is loaded?\n"
-            "  - How does the AI Workload Router make decisions?\n"
-            "  - Is offline mode active?\n"
+            "SPECTRA Local Assistant — Qwen3-0.6B (INT4)\n"
+            + "-" * 46 + "\n\n"
+            "Real on-device generation. Nothing leaves this machine.\n\n"
+            "First run downloads the model (~500 MB):\n"
+            "  python scripts/download_llm.py\n\n"
+            "Then ask it anything, for example:\n"
+            "  - Where is your inference running?\n"
+            "  - Explain what a neural processing unit does.\n"
+            "  - Write a Python function to parse an ONNX model's IO names.\n"
         )
 
     def _send(self):
@@ -168,7 +148,7 @@ class AssistantPage(QWidget):
         self._chat.append("SPECTRA: Processing...")
 
         self._thread = QThread()
-        self._worker = AssistantWorker(prompt)
+        self._worker = AssistantWorker(prompt, llm=self._llm)
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
         self._worker.finished.connect(self._on_response)
@@ -184,14 +164,20 @@ class AssistantPage(QWidget):
             self._chat.setText(current)
 
         self._chat.append(f"\nSPECTRA: {response}")
-        self._chat.append("\n" + "-" * 40)
-        self._chat.append("AI Execution Telemetry")
-        self._chat.append(f"Model   : {meta['model']}")
-        self._chat.append(f"Runtime : {meta['runtime']}")
-        self._chat.append(f"Device  : {meta['device']}")
-        self._chat.append(f"Latency : {meta['latency_ms']:.2f} ms")
-        self._chat.append(f"Local   : {'YES' if meta['local'] else 'NO'}")
-        self._chat.append("-" * 40 + "\n")
+        self._chat.append("\n" + "-" * 46)
+        self._chat.append("Execution Telemetry (measured)")
+        self._chat.append(f"Model    : {meta['model']}")
+        self._chat.append(f"Backend  : {meta['backend']}")
+        self._chat.append(f"Device   : {meta['device']} ({meta['provider']})")
+        if meta.get("requested_device") and meta["requested_device"] != meta["device"]:
+            self._chat.append(f"Requested: {meta['requested_device']} — FALLBACK")
+        self._chat.append(f"Tokens   : {meta.get('tokens', 0)}")
+        self._chat.append(f"TTFT     : {meta.get('ttft_ms', 0):.1f} ms")
+        self._chat.append(f"Throughput: {meta.get('tok_per_s', 0):.2f} tok/s")
+        self._chat.append(f"Offline  : {'YES — no network calls' if meta['local'] else 'NO'}")
+        if meta.get("notes"):
+            self._chat.append(f"Note     : {meta['notes']}")
+        self._chat.append("-" * 46 + "\n")
 
     def _on_error(self, msg: str):
         self._chat.append(f"\nERROR: {msg}\n")

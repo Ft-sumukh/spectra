@@ -1,0 +1,78 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "spectra-ai"
+version = "0.2.0"
+description = "Hardware-aware, fully offline multimodal AI workstation with Snapdragon NPU routing"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "SPECTRA contributors" }]
+keywords = [
+    "onnxruntime", "qualcomm", "qnn", "snapdragon", "npu", "hexagon",
+    "edge-ai", "offline", "local-llm", "windows-ai-pc",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+# Core runtime only. The GUI, the LLM backend and NPU acceleration are extras
+# so that `pip install spectra-ai` stays small and headless machines do not
+# pull in a desktop toolkit they cannot use.
+dependencies = [
+    "onnxruntime>=1.20.0",
+    "numpy>=1.24.0",
+    "pillow>=10.0.0",
+    "psutil>=5.9.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.optional-dependencies]
+gui = ["pyside6>=6.6.0"]
+llm = ["onnxruntime-genai>=0.17.0"]
+vision = ["opencv-python-headless>=4.8.0"]
+all = [
+    "pyside6>=6.6.0",
+    "onnxruntime-genai>=0.17.0",
+    "opencv-python-headless>=4.8.0",
+]
+dev = ["pytest>=8.0.0"]
+
+[project.urls]
+Homepage = "https://github.com/Ft-sumukh/spectra"
+Repository = "https://github.com/Ft-sumukh/spectra"
+Issues = "https://github.com/Ft-sumukh/spectra/issues"
+
+[project.scripts]
+spectra = "app.main:main"
+
+[tool.setuptools]
+packages = [
+    "ai", "ai.llm", "ai.vision",
+    "app",
+    "benchmarking",
+    "config",
+    "core", "core.execution", "core.model_manager", "core.router",
+    "frontend", "frontend.pages",
+    "hardware",
+    "runtime",
+    "utils",
+]
+
+[tool.setuptools.package-data]
+"*" = ["*.json", "*.txt", "*.onnx"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]

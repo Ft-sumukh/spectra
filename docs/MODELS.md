@@ -1,29 +1,60 @@
-# SPECTRA Model Catalog & Compatibility Matrix
+# SPECTRA Model Catalog
 
-## 1. Registered Models
+Every model below is fetched by a script, never committed to the repo.
 
-| Model ID | Architecture | Modality | Task | Format | Size | Target Hardware | License |
-| :--- | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **`mobilenet_v2`** | MobileNetV2 | Vision | Image Classification | ONNX FP32 | 13.59 MB | NPU / GPU / CPU | Apache-2.0 |
-| **`yolov8n_onnx`** | YOLOv8 Nano | Vision | Object Detection | ONNX FP32 | 12.20 MB | NPU / GPU / CPU | AGPL-3.0 |
-| **`sentence_transformer_mini`** | all-MiniLM-L6-v2 | Text | Embedding & Search | PyTorch / ONNX | 90.00 MB | CPU / GPU | Apache-2.0 |
-| **`whisper_tiny`** | Whisper Tiny | Speech | Audio Transcription | PyTorch / ONNX | 150.00 MB | CPU / NPU | MIT |
+## Registered models
 
----
+| Model ID | What it is | Task | Size | Works today | License |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `mobilenet_v2` | MobileNetV2 (ONNX FP32) | Image classification | 13.6 MB | Yes | Apache-2.0 |
+| `yolov8n_onnx` | YOLOv10n (ONNX FP32) | Object detection | 9.0 MB | Yes | AGPL-3.0 |
+| `qwen3_1_7b_int4` | Qwen3-1.7B (INT4) | Text generation | 1.35 GB | Yes | Apache-2.0 |
+| `qwen3_0_6b_int4` | Qwen3-0.6B (INT4) | Text generation | 511 MB | Yes | Apache-2.0 |
+| `sentence_transformer_mini` | all-MiniLM-L6-v2 | Embedding | 90 MB | Registered only | Apache-2.0 |
+| `whisper_tiny` | Whisper Tiny | Speech-to-text | 150 MB | Registered only | MIT |
 
-## 2. Primary Starter Model: MobileNetV2 (ONNX)
+"Registered only" means the model has a `ModelSpec` but no loader in the
+codebase. Neither has been integrated; do not present them as working.
 
-MobileNetV2 is selected as the default vision model for SPECTRA because:
-1. **Designed for Edge Silicon**: Uses inverted residuals and linear bottlenecks to maximize compute efficiency on memory-constrained mobile NPUs.
-2. **Qualcomm AI Hub Verified**: Highly optimized for Qualcomm Hexagon DSP and HTP backends.
-3. **Low Latency**: Runs in under 10ms on modern CPUs, and sub-3ms on Snapdragon Hexagon NPUs.
-4. **Standard 1,000-Class ImageNet Output**: Provides classification across common objects, animals, tools, and vehicles.
+### Why the model_id says `yolov8n_onnx` but the weights are YOLOv10n
 
----
+The ID is kept for backwards compatibility with existing references. The
+weights are YOLOv10n because it ships a working end-to-end ONNX export. The
+original entry pointed at `yolov8n.pt`, a PyTorch checkpoint that no ONNX
+loader could ever open.
 
-## 3. Registering New Models
+## Fetching
 
-To register an edge model in SPECTRA, instantiate a `ModelSpec` in `core/model_manager/manager.py`:
+```powershell
+python scripts/download_mobilenet.py          # 13.6 MB  - classification
+python scripts/download_llm.py                # 1.35 GB  - default assistant
+python scripts/download_llm.py --list         # catalog + install status
+python scripts/download_llm.py --model qwen3_0_6b_int4
+python scripts/verify_detection.py            # 9.0 MB  - detector + test image
+```
+
+## Choosing an LLM
+
+`qwen3_1_7b_int4` is the default. The 0.6B model is in the catalog for
+low-memory machines, but it answers questions about its own hardware
+incorrectly:
+
+```text
+Qwen3-0.6B — "What is an NPU? One sentence."
+  -> "NPU stands for a person, a group, or a team."      (wrong)
+
+Qwen3-1.7B — same question
+  -> "An NPU (Neural Processing Unit) is a specialized hardware component
+      designed to efficiently process and accelerate neural network
+      computations."                                     (correct)
+```
+
+That difference is why 1.35 GB is the default. On Snapdragon X the NPU has
+the headroom for it.
+
+## Registering a new model
+
+Add a `ModelSpec` in `core/model_manager/manager.py`:
 
 ```python
 from core.model_manager.manager import ModelSpec, Modality, ModelTask, ModelFormat
@@ -46,3 +77,7 @@ manager.register_model(ModelSpec(
     license="Apache-2.0"
 ))
 ```
+
+Point `model_path` at a real file relative to `models/`, or
+`check_compatibility()` will report it missing — which is the intended
+behaviour, and the bug the old YOLOv8 entry had.

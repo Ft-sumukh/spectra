@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "feat/**"]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install core + LLM dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install onnxruntime numpy pillow psutil python-dotenv
+          python -m pip install onnxruntime-genai
+
+      # onnxruntime-genai is Windows/Linux only; the CPU test run must still
+      # import cleanly, so the suite is written to skip on ImportError.
+
+      - name: Byte-compile every module
+        run: python -m compileall -q ai app benchmarking config core frontend hardware runtime utils scripts tests
+
+      - name: Unit + integration tests
+        run: python tests/test_spectra.py
+
+      - name: Routing / execution / detection / LLM tests
+        run: python tests/test_routing_execution.py
+
+      - name: Hardware + runtime detection report
+        run: python -c "from hardware.detector import detect_hardware; from runtime.manager import get_runtime_manager; detect_hardware(); get_runtime_manager().print_runtime_report()"
+
+      - name: Model registry sanity
+        run: python -c "from core.model_manager.manager import get_model_manager; m=get_model_manager(); assert len(m.list_models())>=5, m.list_models(); m.print_model_report()"
+
+  # Model-dependent checks. These download weights, so they run nightly and on
+  # demand rather than on every push.
+  verify-models:
+    name: Model verification (downloads weights)
+    runs-on: windows-latest
+    if: github.event_name != 'push' || github.ref == 'refs/heads/main'
+    continue-on-error: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install onnxruntime numpy pillow psutil python-dotenv
+          python -m pip install onnxruntime-genai
+
+      - name: Fetch MobileNetV2
+        run: python scripts/download_mobilenet.py
+
+      - name: Verify routing drives real sessions
+        run: python scripts/verify_routing.py --json
+
+      - name: Verify object detection
+        run: python scripts/verify_detection.py --json
+
+      - name: Fetch and verify the local LLM
+        run: |
+          python scripts/download_llm.py
+          python scripts/verify_llm.py --prompts 1 --max-tokens 64 --json
+
+      - name: Upload verification artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: verification-reports
+          path: logs/*.json
+          if-no-files-found: ignore

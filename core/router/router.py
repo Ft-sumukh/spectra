@@ -204,6 +204,16 @@ class WorkloadRouter:
                         f"Actual device: {device.value} — "
                         f"Reason: {request.preferred_device.value} runtime unavailable or model incompatible"
                     )
+                elif fallback_used:
+                    # Auto-routing landed below the first choice in the priority
+                    # order. That is still a fallback and must be explained.
+                    skipped = [d.value for d in device_order
+                               if device_order.index(d) < device_order.index(device)]
+                    fallback_reason = (
+                        f"Auto-routing evaluated [{' > '.join(d.value for d in device_order)}] "
+                        f"and selected {device.value}. "
+                        f"Unavailable ahead of it: {', '.join(skipped) if skipped else 'none'}."
+                    )
 
                 decision = (
                     f"{device.value} selected because "

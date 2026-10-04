@@ -1,18 +1,21 @@
 # SPECTRA - Dependencies
+#
+# Kept lean on purpose: everything here is imported by code that ships.
+# The original file also listed torch, transformers and sentence-transformers
+# (~2.5 GB) even though nothing in the repo imported them.
+
 # Core AI & Runtime
 onnxruntime>=1.20.0
 numpy>=1.24.0
 pillow>=10.0.0
-opencv-python-headless>=4.8.0
 
-# Desktop GUI
-pyside6>=6.6.0
+# Local LLM generation (ONNX Runtime GenAI).
+# On Snapdragon, also install: onnxruntime-qnn   <- provides QNNExecutionProvider
+onnxruntime-genai>=0.17.0
 
 # System & Hardware Telemetry
 psutil>=5.9.0
 python-dotenv>=1.0.0
 
-# Optional Frameworks (Local Models)
-torch>=2.0.0
-transformers>=4.40.0
-sentence-transformers>=2.7.0
+# Desktop GUI (optional; the headless verification scripts do not need it)
+pyside6>=6.6.0

@@ -1,174 +1,244 @@
-# SPECTRA: Snapdragon-Powered Private Multimodal AI Workspace
+# SPECTRA
+
+**Hardware-aware, fully offline multimodal AI workstation for Windows AI PCs.**
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
-[![Platform](https://img.shields.io/badge/Platform-Windows%2011%20%7C%20Snapdragon-orange.svg)]()
-[![Python](https://img.shields.io/badge/Python-3.10%2B-brightgreen.svg)]()
-[![Runtime](https://img.shields.io/badge/Runtime-ONNX%20%7C%20Qualcomm%20QNN-purple.svg)]()
-[![Offline](https://img.shields.io/badge/Mode-100%25%20Local%20%2F%20Private-success.svg)]()
+[![Python](https://img.shields.io/badge/Python-3.10%2B-brightgreen.svg)](https://www.python.org/)
+[![Tests](https://img.shields.io/badge/tests-70%20passing-success.svg)]()
+[![Runtime](https://img.shields.io/badge/runtime-ONNX%20Runtime%20%7C%20Qualcomm%20QNN-purple.svg)]()
+[![Offline](https://img.shields.io/badge/network-0%20egress-success.svg)]()
 
-> **Built for the Snapdragon AI Lab Build & Present Challenge**  
-> Tailored for Snapdragon X Elite / Plus and Snapdragon-powered HP Windows PCs.
-
----
-
-## 1. What is SPECTRA?
-
-**SPECTRA** is a local-first, privacy-preserving multimodal AI workstation built specifically for next-generation Windows AI PCs. Rather than relying on cloud APIs, SPECTRA executes AI inference directly on local silicon with transparent hardware routing:
-
-$$\text{User Request} \longrightarrow \text{Task Detection} \longrightarrow \text{Model Selection} \longrightarrow \text{Silicon Routing (CPU / GPU / Snapdragon NPU)} \longrightarrow \text{Local Result} + \text{Telemetry}$$
-
-The defining architectural feature of SPECTRA is its **Hardware-Aware AI Workload Router**, which dynamically matches AI tasks (Vision, Speech, Document, Text) to optimal execution providers (Qualcomm Hexagon NPU via QNN, GPU via DirectML/CUDA, CPU via ONNX Runtime).
+> Built for the Snapdragon AI Lab Build & Present Challenge.
+> Targets Snapdragon X Elite / Plus and other Windows AI PCs.
 
 ---
 
-## 2. Why Snapdragon?
+## What SPECTRA actually does
 
-Snapdragon X Series processors introduce dedicated Hexagon Neural Processing Units (NPUs) capable of up to 45 TOPS (Trillion Operations Per Second) at ultra-low power consumption.
+Everything runs on your own hardware. No API keys, no accounts, no network calls.
 
-Traditional AI applications either:
-1. Offload private data to remote cloud servers (high latency, ongoing subscription costs, privacy exposure), or
-2. Run on power-hungry discrete GPUs that exhaust laptop battery life.
+SPECTRA matches each AI task to the best piece of silicon in the machine,
+binds the model to it, and then **reports what really happened** - including
+when the hardware it wanted was not available and it had to fall back.
 
-SPECTRA bridges this gap by targeting the **Qualcomm QNN (Qualcomm Neural Network)** execution provider within ONNX Runtime. Lightweight edge architectures (such as MobileNetV2, MobileNet-SSD, and Quantized Transformers) execute on the Snapdragon NPU at millisecond latencies while keeping the laptop cool and battery-efficient.
-
----
-
-## 3. Core Features
-
-| Feature | Description | Status |
-| :--- | :--- | :---: |
-| **Hardware Detection** | Real-time discovery of CPU, GPU, NPU, RAM, OS, and PnP devices without artificial claims. | **Verified** |
-| **Runtime Abstraction** | Unified manager for ONNX Runtime, Qualcomm QNN EP, PyTorch, and DirectML. | **Verified** |
-| **Model Registry** | Lifecycle management for edge models with memory constraints and quantization tags. | **Verified** |
-| **Workload Router** | Explainable silicon routing engine with explicit fallback logs and reasoning. | **Verified** |
-| **Vision Engine** | Local image classification and object detection with MobileNetV2 (ONNX) and YOLOv8. | **Verified** |
-| **Performance Lab** | Statistical latency benchmarking (Min, Max, Avg, P50, P95, P99, Throughput, Memory). | **Verified** |
-| **Offline Privacy Shield**| Strict offline-first policy: zero telemetry, zero data egress, zero cloud dependencies. | **Verified** |
-| **Desktop Workstation UI**| Professional PySide6 dark interface with real-time hardware telemetry and routing plans. | **Verified** |
-
----
-
-## 4. Hardware Detection & Verification
-
-SPECTRA never fabricates hardware capabilities. Below is the automated detection report generated on the current development environment:
+That last part is the design constraint. A router that silently pretends to be
+using an NPU is worse than no router, because you cannot trust anything it
+reports. Every routing decision in SPECTRA is checkable:
 
 ```text
-==================================================
-  SPECTRA - HARDWARE DETECTION REPORT
-==================================================
-  OS       : Microsoft Windows 11 Home Single Language (10.0.26200)
-  Hostname : SUMUKH
-  CPU      : 13th Gen Intel(R) Core(TM) i5-1335U (10P / 12L cores)
-  Arch     : AMD64 (x86_64)
-  GPU      : Intel(R) Iris(R) Xe Graphics (2048 MB VRAM)
-  NPU      : NOT DETECTED (Honest reporting: Intel host machine)
-  RAM      : 15.7 GB Total / 3.5 GB Available
-  Runtimes : ONNX Runtime 1.26.0 (CPUExecutionProvider, AzureExecutionProvider)
-==================================================
+Requested : NPU
+Bound to  : CPUExecutionProvider (device=CPU)
+Rejected  : ['QNNExecutionProvider']
+FALLBACK  : Requested NPU, but ONNX Runtime bound the session to CPU.
+            The model will run on CPU.
 ```
 
-*When deployed to Snapdragon HP PCs with the Qualcomm AI Stack, SPECTRA detects `QNNExecutionProvider` and routes model execution directly to the Hexagon NPU.*
+## The routing chain, end to end
 
----
-
-## 5. Measured AI Performance (MobileNetV2 ONNX)
-
-Measurements taken on local hardware via the integrated **Performance Lab**:
-
-* **Model**: MobileNetV2 (ONNX FP32, 13.59 MB, 3.5M parameters)
-* **Runtime**: ONNX Runtime 1.26.0
-* **Execution Provider**: CPUExecutionProvider (Fallback on non-Snapdragon host)
-* **Warmup Iterations**: 3
-* **Benchmark Iterations**: 15
-
-$$\text{Average Latency: } 6.95\text{ ms} \quad\vert\quad \text{P95 Latency: } 9.38\text{ ms} \quad\vert\quad \text{Throughput: } 143.88\text{ req/s}$$
-
-*Memory Footprint: < 35 MB total working set during continuous inference.*
-
----
-
-## 6. Architecture Overview
+The claim "routes workloads to NPU / GPU / CPU" only means something if the
+router's decision actually reaches the inference session. In SPECTRA it does:
 
 ```text
-SPECTRA/
-├── app/
-│   └── main.py                     # Application bootstrap & UI launcher
-├── frontend/
-│   ├── main_window.py              # PySide6 desktop workstation shell
-│   └── pages/
-│       ├── dashboard.py            # Live silicon telemetry & active models
-│       ├── vision_page.py          # Multimodal image perception interface
-│       ├── assistant_page.py       # Local AI assistant & execution telemetry
-│       ├── performance_page.py     # Real-time latency benchmark lab
-│       ├── models_page.py          # Registered model catalog & status
-│       └── settings_page.py        # System configuration & flags
-├── core/
-│   ├── router/router.py            # Hardware-aware AI workload router
-│   ├── model_manager/manager.py    # Model catalog & compatibility manager
-│   └── orchestrator/               # Multimodal pipeline coordination
-├── ai/
-│   ├── vision/engine.py            # MobileNetV2 & YOLOv8 inference engine
-│   ├── document/                   # Document intelligence pipeline
-│   ├── speech/                     # Speech recognition pipeline
-│   └── multimodal/                 # Cross-modal reasoning pipeline
-├── runtime/
-│   └── manager.py                  # ONNX, QNN, PyTorch runtime detection
-├── hardware/
-│   └── detector.py                 # Real CPU, GPU, NPU discovery
-├── benchmarking/
-│   └── benchmark.py                # Statistical latency profiling framework
-├── config/
-│   └── settings.py                 # Environment settings & directory paths
-├── tests/
-│   └── test_spectra.py             # 38 comprehensive unit & integration tests
-├── scripts/
-│   ├── setup.ps1                   # Automated Windows environment installer
-│   ├── run.ps1                     # Desktop application launcher
-│   ├── download_mobilenet.py       # MobileNetV2 ONNX acquisition utility
-│   └── benchmark_cli.py            # Headless CLI benchmark runner
-└── docs/                           # In-depth architectural & runtime guides
+WorkloadRequest
+      |
+      v
+WorkloadRouter.route()           pick model + device, record every rejection
+      |                          ExecutionPlan{device, provider, fallback_used, steps[]}
+      v
+core/execution/create_session()  build a real InferenceSession for that device
+      |                          read back session.get_providers() -- the truth
+      v
+VisionEngine / LocalLLM          run inference, report the device it actually ran on
 ```
 
----
+`create_session()` filters the requested provider against what ONNX Runtime
+actually compiled in, always keeps `CPUExecutionProvider` last so a partially
+offloadable model still runs, and reports the binding it actually received
+rather than the one it asked for.
 
-## 7. Quickstart Guide
+## What is genuinely implemented
 
-### Prerequisites
-* Windows 11 (64-bit x64 or ARM64)
-* Python 3.10 to 3.14
+| Capability | Status | Evidence |
+| :--- | :--- | :--- |
+| Hardware detection (CPU / GPU / NPU / RAM) | Working | `python scripts/verify_routing.py` |
+| Router to ONNX session binding | Working | `scripts/verify_routing.py` (6/6) |
+| Image classification (MobileNetV2 ONNX) | Working | `scripts/verify_routing.py` (6/6) |
+| Object detection (YOLOv10n ONNX) | Working | `scripts/verify_detection.py` (8/8) |
+| Local LLM (Qwen3 INT4 via Runtime GenAI) | Working | `scripts/verify_llm.py` (8/8) |
+| Latency benchmark lab (P50/P95/P99/throughput) | Working | `scripts/benchmark_cli.py` |
+| PySide6 workstation UI | Working | `python app/main.py` |
+| 70 unit / integration tests | Working | both suites green |
+| Snapdragon NPU (Hexagon via QNN EP) | **Needs your hardware** | see below |
+| Camera / screen capture / speech pipelines | Not built | see `docs/ROADMAP.md` |
 
-### Automated Setup (PowerShell)
+### Detection, really working
+
+Not a placeholder - a real photo, real boxes, real confidences:
+
+```text
+$ python scripts/verify_detection.py
+  Objects detected: 5
+    [94.16%] bus          bbox=[9, 232, 803, 740]
+    [90.90%] person       bbox=[219, 406, 345, 865]
+    [90.06%] person       bbox=[49, 396, 247, 906]
+    [82.59%] person       bbox=[673, 393, 810, 876]
+    [52.20%] person       bbox=[0, 552, 59, 875]
+```
+
+Both YOLO export layouts are handled: raw-head `[1, 4+nc, anchors]` (YOLOv8,
+with NMS applied in-process) and end-to-end `[1, N, 6]` (YOLOv10, with NMS
+already baked into the graph).
+
+### Local LLM, really working
+
+Qwen3 INT4 running through ONNX Runtime GenAI - the same runtime that exposes
+the Qualcomm QNN provider, so CPU and NPU execution share one code path.
+
+```text
+$ python scripts/verify_llm.py          # Qwen3-1.7B INT4, Intel i5-1335U CPU
+  Mean throughput : 6.28 tok/s
+  Mean TTFT       : 4112 ms
+  Device          : CPU
+```
+
+Asked where it runs, the model answers from SPECTRA's own hardware detection
+rather than guessing:
+
+```text
+Q: Where is your inference running? Name the device.
+A: The inference is running on a CPU (execution provider CPUExecutionProvider).
+```
+
+Those are **CPU** numbers. The 1.7B model is roughly 2.5x slower than the 0.6B
+option on this Intel CPU (17 tok/s) - which is exactly the gap an NPU is meant
+to close. Measure it on Snapdragon and you should see the reverse.
+
+> **On model choice.** Qwen3-0.6B (511 MB) stays in the catalog for
+> low-memory machines, but it answers hardware questions incorrectly -
+> *"What is an NPU?"* -> *"NPU stands for a person, a group, or a team."*
+> Qwen3-1.7B (1.35 GB) is the default because it is the smallest size that is
+> reliably competent.
+
+## Running it
+
 ```powershell
-# Clone the repository
-git clone https://github.com/your-org/spectra.git
+git clone https://github.com/Ft-sumukh/spectra.git
 cd spectra
 
-# Run the automated Windows setup script
-.\scripts\setup.ps1
-```
-
-### Manual Installation
-```powershell
-# 1. Install dependencies
+python -m venv .venv
+.venv\Scripts\activate
 pip install -r requirements.txt
 
-# 2. Acquire default MobileNetV2 ONNX model
-python scripts/download_mobilenet.py
+# Vision models
+python scripts/download_mobilenet.py     # 13.6 MB - classification
+python scripts/verify_detection.py       # 9.0 MB  - detector (downloads itself)
 
-# 3. Run verification test suite
-python tests/test_spectra.py
+# Local LLM (~1.35 GB) -- optional, needed for the assistant page
+python scripts/download_llm.py
 
-# 4. Launch SPECTRA UI
+# Prove the claims
+python scripts/verify_routing.py --json
+python scripts/verify_detection.py --json
+python scripts/verify_llm.py --json
+
+# Run the app
 python app/main.py
 ```
 
-### Headless Benchmarking
+Tests:
+
 ```powershell
-python scripts/benchmark_cli.py
+python tests/test_spectra.py            # 38 tests
+python tests/test_routing_execution.py  # 32 tests
 ```
 
----
+## Running on Snapdragon - read this
 
-## 8. License
+The NPU path is implemented but **untested on real Snapdragon silicon**, because
+the development machine is an Intel Core i5-1335U with no NPU. Everything
+below is what to do when you run it on your Snapdragon X Series machine.
 
-SPECTRA is released under the [Apache 2.0 License](LICENSE).
+Install the Qualcomm execution provider first. Plain `onnxruntime` does **not**
+include QNN:
+
+```powershell
+pip install onnxruntime-qnn          # provides QNNExecutionProvider
+```
+
+Then confirm the provider is genuinely compiled in:
+
+```powershell
+python -c "import onnxruntime as ort; print(ort.get_available_providers())"
+# expect 'QNNExecutionProvider' in the list
+```
+
+`python scripts/verify_routing.py` will then bind MobileNetV2 to the Hexagon
+NPU and report the device it actually got. If QNN is missing you will get the
+honest fallback path, not a fake NPU result.
+
+**A trap worth knowing:** `onnxruntime_genai.is_qnn_available()` returns `True`
+on non-Qualcomm hardware. It probes for a DLL, not a working NPU. Do not use
+it as evidence of NPU acceleration - read `Model.device_type` or
+`session.get_providers()` instead. `scripts/verify_llm.py` prints it but
+explicitly labels it a DLL probe.
+
+### Getting NPU numbers for the competition
+
+Once QNN is live, the interesting comparison is the same model on CPU versus
+NPU, with latency and package power measured for identical workloads:
+
+```powershell
+python scripts/verify_routing.py --json    # per-device binding report
+python scripts/verify_llm.py --json         # tok/s on the bound device
+```
+
+For power, measure package draw with something like `powercfg /batteryreport`
+or an external meter. Numbers you measured yourself are worth more than any
+table you paste into a slide.
+
+## Privacy
+
+- No network calls in any inference path.
+- No telemetry, no analytics, no crash upload.
+- Model weights are fetched once from Hugging Face, then used offline.
+- `OFFLINE_MODE=true` is the default in `.env.example`.
+
+## Architecture
+
+```text
+spectra/
+|-- core/
+|   |-- execution/session_builder.py   router plan -> real ORT session
+|   |-- router/router.py               explainable device routing
+|   `-- model_manager/manager.py       model catalog + compatibility
+|-- ai/
+|   |-- llm/engine.py                  local LLM via ONNX Runtime GenAI
+|   `-- vision/engine.py               classification + object detection
+|-- runtime/manager.py                 execution provider discovery
+|-- hardware/detector.py               CPU / GPU / NPU discovery
+|-- benchmarking/benchmark.py          latency statistics
+|-- frontend/                          PySide6 workstation UI
+|-- scripts/
+|   |-- verify_routing.py              proves routing drives real sessions
+|   |-- verify_detection.py            proves detection works
+|   |-- verify_llm.py                  proves the LLM generates
+|   `-- download_llm.py                model acquisition
+`-- tests/                             70 tests
+```
+
+## Documentation
+
+| Document | Contents |
+| :--- | :--- |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | component design and data flow |
+| [docs/PRIVACY.md](docs/PRIVACY.md) | offline guarantees |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | what is built and what is not |
+| [docs/BENCHMARKING.md](docs/BENCHMARKING.md) | how latency is measured |
+| [docs/MODELS.md](docs/MODELS.md) | model catalog and licenses |
+
+## License
+
+Apache 2.0 - see [LICENSE](LICENSE).
+
+Model weights carry their own licenses: MobileNetV2 (Apache-2.0),
+YOLOv10n (AGPL-3.0), Qwen3 (Apache-2.0).

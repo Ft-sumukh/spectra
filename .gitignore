@@ -1,50 +1,33 @@
 # Python
 __pycache__/
 *.py[cod]
-*$py.class
-*.so
-.Python
-env/
-venv/
-.venv/
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-pip-wheel-metadata/
-share/python-wheels/
 *.egg-info/
-.installed.cfg
-*.egg
+build/
+dist/
+.venv/
+venv/
 
-# Virtual Environment
-.env
-!.env.example
-
-# Models & Weights (Never commit raw weights)
+# Model weights — fetched by scripts, never committed
 models/*.onnx
-models/*.pt
-models/*.bin
-models/*.safetensors
-models/*.dlc
+models/llm/
+models/**/*.onnx
+*.onnx.data
 
-# Data & Cache
+# Runtime output
+logs/
 data/cache/
-data/samples/*.tmp
-logs/*.log
 
-# IDE & OS
-.idea/
+# Local config
+.env
+
+# Editors / OS
 .vscode/
-*.swp
-*.swo
-.DS_Store
+.idea/
 Thumbs.db
+desktop.ini
+
+# One-shot migration scaffolding (not part of the project)
+_fix*.py
+fix_*.py
+_\w*.py
+models/registry.json

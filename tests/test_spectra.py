@@ -152,7 +152,12 @@ class TestModelManager(unittest.TestCase):
         spec = self.manager.get_model_spec("yolov8n_onnx")
         self.assertIsNotNone(spec)
         self.assertEqual(spec.model_id, "yolov8n_onnx")
-        self.assertEqual(spec.name, "YOLOv8 Nano")
+        # The detector was corrected to point at a real ONNX export, which is
+        # YOLOv10n. The model_id is kept for backwards compatibility, but the
+        # name must describe the actual weights.
+        self.assertEqual(spec.name, "YOLOv10 Nano")
+        self.assertTrue(spec.model_path.endswith(".onnx"),
+                        "detector must point at an ONNX file, not a .pt checkpoint")
 
     def test_model_compatibility_check(self):
         """Compatibility check must validate device and runtime."""

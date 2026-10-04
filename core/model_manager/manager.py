@@ -201,25 +201,35 @@ class ModelManager:
             description="MobileNetV2 — Google edge-optimized CNN for image classification & Snapdragon NPU acceleration. 3.5M params.",
         ))
 
-        # YOLOv8n ONNX — ultra-lightweight object detection
+        # YOLOv10n ONNX — ultra-lightweight object detection.
+        # Replaces the previous entry, which pointed at a .pt PyTorch
+        # checkpoint that no ONNX loader could ever open.
         self._registry.register(ModelSpec(
             model_id="yolov8n_onnx",
-            name="YOLOv8 Nano",
-            version="8.0",
+            name="YOLOv10 Nano",
+            version="10.0",
             modality=Modality.VISION,
             task=ModelTask.OBJECT_DETECTION,
             format=ModelFormat.ONNX,
             quantization="fp32",
             supported_runtimes=["onnx_cpu", "onnx_gpu", "onnx_qnn"],
             supported_devices=["CPU", "GPU", "NPU"],
-            memory_requirement_mb=12.0,
+            memory_requirement_mb=9.0,
             input_type="image",
             output_type="bounding_boxes",
             local_only=True,
-            model_path="yolov8n.onnx",
-            download_url="https://github.com/ultralytics/assets/releases/download/v8.3.0/yolov8n.pt",
+            model_path="yolov10n.onnx",
+            download_url=(
+                "https://huggingface.co/onnx-community/yolov10n/"
+                "resolve/main/onnx/model.onnx"
+            ),
             license="AGPL-3.0",
-            description="YOLOv8 Nano — ultra-lightweight real-time object detection. 3.2M params.",
+            description=(
+                "YOLOv10 Nano — 2.3M params, 9 MB. End-to-end NMS export "
+                "(output [1,300,6]). The engine also decodes raw-head "
+                "[1,84,8400] exports from YOLOv8. Fetch with "
+                "scripts/verify_detection.py."
+            ),
         ))
 
         # Sentence transformer for text embedding — lightweight
@@ -256,6 +266,65 @@ class ModelManager:
             output_type="text",
             local_only=True,
             description="OpenAI Whisper Tiny — local speech-to-text. 39M params.",
+        ))
+
+        # Qwen3-1.7B INT4 — default local text generation via ONNX Runtime GenAI.
+        # Registered as a real GENERATION model so the router can select it.
+        self._registry.register(ModelSpec(
+            model_id="qwen3_1_7b_int4",
+            name="Qwen3-1.7B (INT4, KLD block-128)",
+            version="1.0",
+            modality=Modality.TEXT,
+            task=ModelTask.GENERATION,
+            format=ModelFormat.ONNX,
+            quantization="int4 (KLD, block 128)",
+            supported_runtimes=["onnx_cpu", "onnx_gpu", "onnx_qnn"],
+            supported_devices=["CPU", "GPU", "NPU"],
+            memory_requirement_mb=1360.0,
+            input_type="text",
+            output_type="text",
+            local_only=True,
+            model_path="llm/qwen3_1_7b_int4/model.onnx",
+            download_url=(
+                "https://huggingface.co/onnx-community/Qwen3-1.7B-ONNX/"
+                "resolve/main/onnxruntime/cpu_and_mobile/cpu-int4-kld-block-128/"
+            ),
+            license="Apache-2.0",
+            description=(
+                "Qwen3-1.7B INT4 — default SPECTRA assistant. 1.7B params, "
+                "1.35 GB on disk. Runs via ONNX Runtime GenAI, the same "
+                "runtime that exposes the Qualcomm QNN provider, so CPU and "
+                "NPU execution share one code path. Fetch with "
+                "scripts/download_llm.py."
+            ),
+        ))
+
+        # Qwen3-0.6B INT4 — low-memory alternative for constrained machines.
+        self._registry.register(ModelSpec(
+            model_id="qwen3_0_6b_int4",
+            name="Qwen3-0.6B (INT4, KLD block-128)",
+            version="1.0",
+            modality=Modality.TEXT,
+            task=ModelTask.GENERATION,
+            format=ModelFormat.ONNX,
+            quantization="int4 (KLD, block 128)",
+            supported_runtimes=["onnx_cpu", "onnx_gpu", "onnx_qnn"],
+            supported_devices=["CPU", "GPU", "NPU"],
+            memory_requirement_mb=520.0,
+            input_type="text",
+            output_type="text",
+            local_only=True,
+            model_path="llm/qwen3_0_6b_int4/model.onnx",
+            download_url=(
+                "https://huggingface.co/onnx-community/Qwen3-0.6B-ONNX/"
+                "resolve/main/onnxruntime/cpu_and_mobile/cpu-int4-kld-block-128/"
+            ),
+            license="Apache-2.0",
+            description=(
+                "Qwen3-0.6B INT4 — 511 MB, for machines that cannot spare "
+                "1.35 GB. Answers questions about its own hardware "
+                "unreliably; prefer the 1.7B model when memory allows."
+            ),
         ))
 
         log.info(f"Built-in models registered: {len(self._registry.list_models())}")
